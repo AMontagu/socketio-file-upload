@@ -33,6 +33,10 @@ test("basic functionality", function (t) {
 	t.notOk(client.useText, "instance.useText defaults to false");
 	t.ok(client.useBuffer, "instance.useBuffer defaults to true");
 	t.notOk(client.serializeOctets, "instance.serializeOctets defaults to false");
+	t.equal(client.topicName, "siofu", "instance.topicName defaults to siofu");
+	t.notOk(client.onlyOneTopic, "instance.onlyOneTopic defaults to false");
+	t.notOk(client.wrapOptions, "instance.wrapOptions defaults to null");
+	t.notOk(client.unwrapOptions, "instance.wrapOptions defaults to null");
 
 	if (window._phantom) {
 		console.log("PHANTOMJS DETECTED: Disabling useBuffer now.");
@@ -44,6 +48,117 @@ test("basic functionality", function (t) {
 	t.pass("SELECT FILES TO UPLOAD");
 
 	client.listenOnInput(document.querySelector("input"));
+
+	client.addEventListener("choose", function (ev) {
+		numSubmitted = ev.files.length;
+		t.ok(numSubmitted, "user just submitted " + numSubmitted + " files " + evtos(ev));
+		socket.emit("numSubmitted", numSubmitted);
+
+		t.notOk(startFired, "'start' event must not have been fired yet " + evtos(ev));
+		t.notOk(loadFired, "'load' event must not have been fired yet " + evtos(ev));
+		t.notOk(progressFired, "'progress' event must not have been fired yet " + evtos(ev));
+		t.notOk(completeFired, "'complete' event must not have been fired yet " + evtos(ev));
+	});
+
+	client.addEventListener("start", function (ev) {
+		t.ok(!!ev.file, "file not in start event object " + evtos(ev));
+		t.ok(++startFired <= numSubmitted, "'start' event has not fired too many times " + evtos(ev));
+		// Client-to-Server Metadata
+		ev.file.meta.bar = "from-client";
+	});
+
+	client.addEventListener("load", function (ev) {
+		t.ok(!!ev.file, "file not in load event object " + evtos(ev));
+		t.ok(++loadFired <= numSubmitted, "'load' event has not fired too many times " + evtos(ev));
+	});
+
+	client.addEventListener("progress", function (ev) {
+		t.ok(ev.bytesLoaded <= ev.file.size, "'progress' size calculation " + evtos(ev));
+	});
+
+	client.addEventListener("complete", function (ev) {
+		t.ok(++completeFired <= numSubmitted, "'complete' event has not fired too many times " + evtos(ev));
+
+		t.ok(ev.detail, "'complete' event has a 'detail' property " + evtos(ev));
+		t.ok(ev.success, "'complete' event was successful " + evtos(ev));
+
+		// Server-to-Client Metadata
+		t.equal(ev.detail.foo, "from-server", "server-to-client metadata correct " + evtos(ev));
+
+		if (completeFired >= numSubmitted) {
+
+			t.equal(startFired, numSubmitted, "'start' event fired the right number of times " + evtos(ev));
+			t.equal(loadFired, numSubmitted, "'load' event fired the right number of times " + evtos(ev));
+			t.equal(completeFired, numSubmitted, "'complete' event fired the right number of times " + evtos(ev));
+
+			client.destroy();
+			socket.disconnect();
+			t.end();
+		}
+	});
+
+	client.addEventListener("error", function (ev) {
+		t.fail("Error: " + ev.file + " - " + ev.message);
+		client.destroy();
+		t.end();
+	});
+});
+
+test("Send to only one topic functionality", function (t) {
+	var socket = new SocketIoClient();
+	var client = new SiofuClient(socket, {
+		topicName: "siofu_only_topic",
+		onlyOneTopic: true,
+		wrapOptions: {
+			siofuDataKey: "message",
+			siofuActionKey: "action"
+		},
+		unwrapOptions: {
+			siofuDataKey: "data",
+			siofuActionKey: "action"
+		}
+	});
+
+	var numSubmitted = 0;
+	var startFired = 0;
+	var loadFired = 0;
+	var progressFired = 0;
+	var completeFired = 0;
+
+	t.equal(typeof client.listenOnInput, "function", "instance.listenOnInput is a function");
+	t.equal(typeof client.listenOnDrop, "function", "instance.listenOnDrop is a function");
+	t.equal(typeof client.listenOnSubmit, "function", "instance.listenOnSubmit is a function");
+	t.equal(typeof client.listenOnArraySubmit, "function", "instance.listenOnArraySubmit is a function");
+	t.equal(typeof client.prompt, "function", "instance.prompt is a function");
+	t.equal(typeof client.submitFiles, "function", "instance.submitFiles is a function");
+	t.equal(typeof client.destroy, "function", "instance.destroy is a function");
+
+	t.notOk(client.maxFileSize, "instance.maxFileSize defaults to null");
+	t.equal(client.chunkSize, 102400, "instance.chunkSize defaults to 100 KiB");
+	t.notOk(client.useText, "instance.useText defaults to false");
+	t.ok(client.useBuffer, "instance.useBuffer defaults to true");
+	t.notOk(client.serializeOctets, "instance.serializeOctets defaults to false");
+	t.equal(client.topicName, "siofu_only_topic", "instance.topicName to siofu_only_topic");
+	t.ok(client.onlyOneTopic, "instance.onlyOneTopic is true");
+	t.deepLooseEqual(client.wrapOptions, {
+		siofuDataKey: "message",
+		siofuActionKey: "action"
+	} ,"instance.wrapOptions are set to wrap data");
+	t.deepLooseEqual(client.unwrapOptions, {
+		siofuDataKey: "data",
+		siofuActionKey: "action"
+	} ,"instance.unwrapOptions are set to unwrap data");
+
+	if (window._phantom) {
+		console.log("PHANTOMJS DETECTED: Disabling useBuffer now.");
+		// Seems to be a bug in PhantomJS
+		client.useBuffer = false;
+	}
+
+	t.pass("");
+	t.pass("SELECT FILES TO UPLOAD");
+
+	client.listenOnInput(document.querySelector("#file-picker-for-only-one-topic"));
 
 	client.addEventListener("choose", function (ev) {
 		numSubmitted = ev.files.length;

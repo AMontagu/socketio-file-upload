@@ -6,9 +6,9 @@ var SocketIo = require("socket.io");
 var SiofuServer = require("../server.js");
 
 module.exports = {
-	setup: function(httpServer, connectionCb) {
+	setup: function(httpServer, connectionCb, siofuOptions) {
 		var io = new SocketIo(httpServer);
-		var uploader = new SiofuServer();
+		var uploader = new SiofuServer(siofuOptions);
 
 		io.on("connection", function (socket) {
 			uploader.listen(socket);
