@@ -167,12 +167,21 @@ function SocketIOFileUploadServer(options) {
 		callback(true);
 	};
 
-	var _getTopicName = function (topicExtension) {
-		if (self.wrapData) {
-			return self.topicName;
+	var _getTopicName = function (topicExtension, toSend) {
+		var _topicName = self.topicName;
+		if (typeof self.topicName === "object" && typeof self.topicName.sendTopicName === "string" && typeof self.topicName.receiveTopicName === "string") {
+			if (toSend) {
+				_topicName = self.topicName.sendTopicName;
+			} else {
+				_topicName = self.topicName.receiveTopicName;
+			}
 		}
 
-		return self.topicName + topicExtension;
+		if (self.wrapData) {
+			return _topicName;
+		}
+
+		return _topicName + topicExtension;
 	};
 
 	var _wrapData = function (data, action) {
@@ -208,7 +217,7 @@ function SocketIOFileUploadServer(options) {
 			return;
 		}
 
-		socket.emit(_getTopicName("_complete"), _wrapData({
+		socket.emit(_getTopicName("_complete", true), _wrapData({
 			id: id,
 			success: success,
 			detail: fileInfo.clientDetail
@@ -318,10 +327,12 @@ function SocketIOFileUploadServer(options) {
 						// _emitComplete needs to happen before _cleanupFile2 so that the file info object is still valid
 						_cleanupFile1(data.id);
 						self.emit("saved", {
-							file: fileInfo
+							file: fileInfo,
+							callback: function() {
+								_emitComplete(socket, data.id, fileInfo.success);
+								_cleanupFile2(data.id);
+							}
 						});
-						_emitComplete(socket, data.id, fileInfo.success);
-						_cleanupFile2(data.id);
 					});
 				}
 				else {
@@ -366,7 +377,7 @@ function SocketIOFileUploadServer(options) {
 				if (self.maxFileSize !== null
 						&& fileInfo.bytesLoaded > self.maxFileSize) {
 					fileInfo.success = false;
-					socket.emit(_getTopicName("_error"), _wrapData({
+					socket.emit(_getTopicName("_error", true), _wrapData({
 						id: data.id,
 						message: "Max allowed file size exceeded"
 					}, "error"));
@@ -389,7 +400,7 @@ function SocketIOFileUploadServer(options) {
 					}
 				}
 				// Emit that the chunk has been received, so client starts sending the next chunk
-				socket.emit(_getTopicName("_chunk"), _wrapData({ id: data.id }, "chunk"));
+				socket.emit(_getTopicName("_chunk", true), _wrapData({ id: data.id }, "chunk"));
 				self.emit("progress", {
 					file: fileInfo,
 					buffer: buffer
@@ -441,7 +452,7 @@ function SocketIOFileUploadServer(options) {
 				} else {
 					// If we're not saving the file, we are ready to start receiving data now.
 					if (!self.dir) {
-						socket.emit(_getTopicName("_ready"), _wrapData({
+						socket.emit(_getTopicName("_ready", true), _wrapData({
 							id: data.id,
 							name: null
 						}, "ready"));
@@ -489,7 +500,7 @@ function SocketIOFileUploadServer(options) {
 								return;
 							}
 
-							socket.emit(_getTopicName("_ready"), _wrapData({
+							socket.emit(_getTopicName("_ready", true), _wrapData({
 								id: data.id,
 								name: newBase
 							}, "ready"));
@@ -579,12 +590,11 @@ function SocketIOFileUploadServer(options) {
 				progress: _uploadProgress(socket),
 				done: _uploadDone(socket)
 			};
-			socket.on(self.topicName, function(message) {
+			socket.on(_getTopicName("", false), function(message) {
 				if (typeof message !== "object") {
 					console.log("SocketIOFileUploadServer Error: You choose to wrap your data so the message from the client need to be an object"); // eslint-disable-line no-console
 					return;
 				}
-
 
 				var actionKey = self.wrapData.unwrapKey && typeof self.wrapData.unwrapKey.action === "string" ? self.wrapData.unwrapKey.action : "action";
 				var messageKey = self.wrapData.unwrapKey && typeof self.wrapData.unwrapKey.message === "string" ? self.wrapData.unwrapKey.message : "message";
@@ -598,9 +608,9 @@ function SocketIOFileUploadServer(options) {
 				actionToMethods[action](data);
 			});
 		} else {
-			socket.on(self.topicName + "_start", _uploadStart(socket));
-			socket.on(self.topicName + "_progress", _uploadProgress(socket));
-			socket.on(self.topicName + "_done", _uploadDone(socket));
+			socket.on(_getTopicName("_start", false), _uploadStart(socket));
+			socket.on(_getTopicName("_progress", false), _uploadProgress(socket));
+			socket.on(_getTopicName("_done", false), _uploadDone(socket));
 		}
 
 		socket.on("disconnect", _onDisconnect(socket));
@@ -625,7 +635,7 @@ function SocketIOFileUploadServer(options) {
 		}
 
 		fileInfo.success = false;
-		socket.emit(_getTopicName("_error"), _wrapData({
+		socket.emit(_getTopicName("_error", true), _wrapData({
 			id: id,
 			message: "File upload aborted by server"
 		}, "error"));

@@ -165,12 +165,21 @@
 	 */
 	self.exposePrivateFunction = _getOption("exposePrivateFunction", false);
 
-	var _getTopicName = function (topicExtension) {
-		if (self.wrapData) {
-			return self.topicName;
+	var _getTopicName = function (topicExtension, toSend) {
+		var _topicName = self.topicName;
+		if (typeof self.topicName === "object" && typeof self.topicName.sendTopicName === "string" && typeof self.topicName.receiveTopicName === "string") {
+			if (toSend) {
+				_topicName = self.topicName.sendTopicName;
+			} else {
+				_topicName = self.topicName.receiveTopicName;
+			}
 		}
 
-		return self.topicName + topicExtension;
+		if (self.wrapData) {
+			return _topicName;
+		}
+
+		return _topicName + topicExtension;
 	};
 
 	var _wrapData = function (data, action) {
@@ -291,7 +300,7 @@
 					}
 				}
 				catch (error) {
-					socket.emit(_getTopicName("_done"), _wrapData({
+					socket.emit(_getTopicName("_done", true), _wrapData({
 						id: id,
 						interrupt: true
 					}, "done"));
@@ -300,7 +309,7 @@
 			}
 
 			// TODO override the send data
-			socket.emit(_getTopicName("_progress"), _wrapData({
+			socket.emit(_getTopicName("_progress", true), _wrapData({
 				id: id,
 				size: file.size,
 				start: start,
@@ -312,7 +321,7 @@
 
 		// Callback when tranmission is complete.
 		var transmitDone = function () {
-			socket.emit(_getTopicName("_done"), _wrapData({
+			socket.emit(_getTopicName("_done", true), _wrapData({
 				id: id
 			}, "done"));
 		};
@@ -369,7 +378,7 @@
 
 		// Listen for an "error" event.  Stop the transmission if one is received.
 		_listenTo(reader, "error", function () {
-			socket.emit(_getTopicName("_done"), _wrapData({
+			socket.emit(_getTopicName("_done", true), _wrapData({
 				id: id,
 				interrupt: true
 			}, "done"));
@@ -378,7 +387,7 @@
 
 		// Do the same for the "abort" event.
 		_listenTo(reader, "abort", function () {
-			socket.emit(_getTopicName("_done"), _wrapData({
+			socket.emit(_getTopicName("_done", true), _wrapData({
 				id: id,
 				interrupt: true
 			}, "done"));
@@ -386,7 +395,7 @@
 		});
 
 		// Transmit the "start" message to the server.
-		socket.emit(_getTopicName("_start"), _wrapData({
+		socket.emit(_getTopicName("_start", true), _wrapData({
 			name: file.name,
 			mtime: file.lastModified,
 			meta: file.meta,
@@ -738,7 +747,7 @@
 			error: _errorCallback
 		};
 
-		_listenTo(socket, _getTopicName(), function (message) {
+		_listenTo(socket, _getTopicName("", false), function (message) {
 			if (typeof message !== "object") {
 				console.log("SocketIOFileUploadClient Error: You choose to wrap your data so the message from the server need to be an object"); // eslint-disable-line no-console
 				return;
@@ -755,10 +764,10 @@
 			mapActionToCallback[action](data);
 		});
 	} else {
-		_listenTo(socket, _getTopicName("_chunk"), _chunckCallback);
-		_listenTo(socket, _getTopicName("_ready"), _readyCallback);
-		_listenTo(socket, _getTopicName("_complete"), _completCallback);
-		_listenTo(socket, _getTopicName("_error"), _errorCallback);
+		_listenTo(socket, _getTopicName("_chunk", false), _chunckCallback);
+		_listenTo(socket, _getTopicName("_ready", false), _readyCallback);
+		_listenTo(socket, _getTopicName("_complete", false), _completCallback);
+		_listenTo(socket, _getTopicName("_error", false), _errorCallback);
 	}
 
 	if (this.exposePrivateFunction) {
