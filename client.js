@@ -70,7 +70,8 @@
 		uploadedFiles = {},
 		chunkCallbacks = {},
 		readyCallbacks = {},
-		communicators = {};
+		communicators = {},
+		additonalData = {};
 
 	var _getOption = function (key, defaultValue) {
 		if(!options) {
@@ -158,7 +159,6 @@
 		return true;
 	};
 
-
 	/**
 	 * Allow user to access to some private function to customize message reception.
 	 * This is used if you specified wrapOptions on the client side and have to manually bind message to callback.
@@ -206,13 +206,16 @@
 	 *                             to be attached to the event object.
 	 * @return {boolean} false if any callback returned false; true otherwise
 	 */
-	var _dispatch = function (eventName, properties) {
+	var _dispatch = function (eventName, properties, id) {
 		var evnt = document.createEvent("Event");
 		evnt.initEvent(eventName, false, false);
 		for (var prop in properties) {
 			if (properties.hasOwnProperty(prop)) {
 				evnt[prop] = properties[prop];
 			}
+		}
+		if (id && typeof additonalData[id] !== "undefined") {
+			evnt.additionalData = additonalData[id];
 		}
 		return self.dispatchEvent(evnt);
 	};
@@ -250,7 +253,7 @@
 				file: file,
 				message: "Attempt by client to upload file exceeding the maximum file size",
 				code: 1
-			});
+			}, file.id);
 			return;
 		}
 
@@ -258,7 +261,7 @@
 		// this file to be uploaded.
 		var evntResult = _dispatch("start", {
 			file: file
-		});
+		}, file.id);
 		if (!evntResult) return;
 
 		// Scope variables
@@ -359,7 +362,7 @@
 				file: file,
 				bytesLoaded: bytesLoaded,
 				name: newName
-			});
+			}, file.id);
 
 			// Get ready to send the next chunk
 			offset += chunkSize;
@@ -370,7 +373,7 @@
 					file: file,
 					reader: reader,
 					name: newName
-				});
+				}, file.id);
 				uploadComplete = true;
 			}
 		};
@@ -722,7 +725,7 @@
 				file: uploadedFiles[data.id],
 				detail: data.detail,
 				success: data.success
-			});
+			}, data.id);
 		}
 	};
 
@@ -732,7 +735,7 @@
 				file: uploadedFiles[data.id],
 				message: data.message,
 				code: 0
-			});
+			}, data.id);
 			if (communicators) communicators[data.id].abort = true;
 		}
 	};
@@ -761,6 +764,7 @@
 				console.log("SocketIOFileUploadClient Error: You choose to wrap your data but the message from the server is wrong configured. Check the message and your wrapData option"); // eslint-disable-line no-console
 				return;
 			}
+			additonalData[data.id] = messageKey
 			mapActionToCallback[action](data);
 		});
 	} else {
