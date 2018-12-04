@@ -214,7 +214,7 @@
 				evnt[prop] = properties[prop];
 			}
 		}
-		if (id && typeof additonalData[id] !== "undefined") {
+		if (typeof id !== "undefined" && typeof additonalData[id] !== "undefined") {
 			evnt.additionalData = additonalData[id];
 		}
 		return self.dispatchEvent(evnt);
@@ -764,7 +764,9 @@
 				console.log("SocketIOFileUploadClient Error: You choose to wrap your data but the message from the server is wrong configured. Check the message and your wrapData option"); // eslint-disable-line no-console
 				return;
 			}
-			additonalData[data.id] = messageKey
+			if (message.additionalData) {
+				additonalData[data.id] = message.additionalData;
+			}
 			mapActionToCallback[action](data);
 		});
 	} else {

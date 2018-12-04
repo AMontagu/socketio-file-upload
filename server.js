@@ -190,7 +190,7 @@ function SocketIOFileUploadServer(options) {
 		}
 		var dataWrapped = {};
 		if(self.wrapData.additionalData) {
-			Object.assign(dataWrapped, self.wrapData.additionalData);
+			dataWrapped.additionalData = self.wrapData.additionalData;
 		}
 
 		var actionKey = self.wrapData.wrapKey && typeof self.wrapData.wrapKey.action === "string" ? self.wrapData.wrapKey.action : "action";
